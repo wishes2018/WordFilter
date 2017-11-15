@@ -8,7 +8,7 @@ local WordFilter = class("WordFilter")
 function WordFilter:ctor(replaceWord,ignoreWords,maxDepth)
 	ignoreWords = ignoreWords or ""
 	self.maxDepth = maxDepth or 20   --最大深度，暂未处理
-	self.firstLevel = {_isInit=false,iters={},map={}}
+	self.firstLevel = {_isInit=false,_isEnd=false,iters={},map={}}
 	self.ignoreCode = {}
 
 
@@ -42,10 +42,12 @@ function WordFilter:unfoldLevel(level)
 	 	local code = self:next(iter)
 	 	if code then
 			if not level.map[code] then
-				local nextLevel = {_isInit=false,iters={},map={}}
+				local nextLevel = {_isInit=false,_isEnd=false,iters={},map={}}
 				level.map[code] = nextLevel
 			end
 			table.insert(level.map[code].iters,iter)
+		else
+			level._isEnd = true
 	 	end
 	 end
 	 level._isInit = true
@@ -57,23 +59,35 @@ function WordFilter:doFilter(words)
 	local startIndex = 0
 	local endIndex = 0
 	local currLevel = self.firstLevel
+	local nextLevel = currLevel
 	local isExist = false
 
-	for i,code in utf8.codes(words) do
+	for index,code in utf8.codes(words) do
+		table.insert(ret,code)
+		local i = #ret
+
 		if not self.ignoreCode[code] then
-			local nextLevel = currLevel and currLevel.map[code]
+			code = self:convertEnLowerCode(code)
+			nextLevel = currLevel and currLevel.map[code]
 			if nextLevel then
 				if startIndex == 0 then
 					startIndex = i
 				end
-				endIndex = i
+
 				self:unfoldLevel(nextLevel)
 				currLevel = nextLevel
-			else
-				if startIndex > 0 and endIndex > 0 and endIndex > startIndex then
-					table.insert(replaceList,{startIndex,endIndex})
-				end
 
+				if nextLevel._isEnd then
+					endIndex = i
+					if startIndex > 0 and endIndex > 0 and endIndex >= startIndex then
+						table.insert(replaceList,{startIndex,endIndex})
+					end
+					--屏蔽词完结,重置成第一层
+					currLevel = self.firstLevel
+					startIndex = 0
+					endIndex = 0
+				end
+			else
 				--重置成第一层
 				currLevel = self.firstLevel
 				startIndex = 0
@@ -85,20 +99,23 @@ function WordFilter:doFilter(words)
 					if startIndex == 0 then
 						startIndex = i
 					end
-					endIndex = i
 					self:unfoldLevel(nextLevel)
 					currLevel = nextLevel
+
+					if nextLevel._isEnd then
+						endIndex = i
+						if startIndex > 0 and endIndex > 0 and endIndex >= startIndex then
+							table.insert(replaceList,{startIndex,endIndex})
+						end
+						--屏蔽词完结,重置成第一层
+						currLevel = self.firstLevel
+						startIndex = 0
+						endIndex = 0
+					end
 				end
 			end
 		end
-
-		table.insert(ret,code)
 	end
-
-	if startIndex > 0 and endIndex > 0 and endIndex > startIndex then
-		table.insert(replaceList,{startIndex,endIndex})
-	end
-
 
 	-- dump(self.firstLevel,"self.firstLevel",10)
 	-- dump(replaceList,"replaceList",10)
@@ -135,33 +152,44 @@ function WordFilter:isFilter(words)
 	local startIndex = 0
 	local endIndex = 0
 	local currLevel = self.firstLevel
+	local nextLevel = currLevel
 	local isExist = false
 
-	for i,code in utf8.codes(words) do
+	for index,code in utf8.codes(words) do
+		table.insert(ret,code)
+		local i = #ret
+
 		if not self.ignoreCode[code] then
-			local nextLevel = currLevel and currLevel.map[code]
+			code = self:convertEnLowerCode(code)
+			nextLevel = currLevel and currLevel.map[code]
 			if nextLevel then
 				if startIndex == 0 then
 					startIndex = i
 				end
-				endIndex = i
 				self:unfoldLevel(nextLevel)
 				currLevel = nextLevel
-			else
-				if startIndex > 0 and endIndex > 0 and endIndex > startIndex then
-					if self:isLetter(ret[startIndex]) and self:isLetter(ret[endIndex]) then
-						local preLetter = ret[startIndex - 1]
-						local nextLetter = ret[endIndex + 1]
-						--前后两个都不是字母时为屏蔽字
-						if not self:isLetter(preLetter) and not self:isLetter(nextLetter) then
-							return true
+
+				if nextLevel._isEnd then
+					endIndex = i
+					if startIndex > 0 and endIndex > 0 and endIndex >= startIndex then
+						if self:isLetter(ret[startIndex]) and self:isLetter(ret[endIndex]) then
+							local preLetter = ret[startIndex - 1]
+							local nextLetter = ret[endIndex + 1]
+							--前后两个都不是字母时为屏蔽字
+							if not self:isLetter(preLetter) and not self:isLetter(nextLetter) then
+								return true
+							end
+							return false
 						end
-						return false
+						
+						return true
 					end
-
-					return true
+					--屏蔽词完结,重置成第一层
+					currLevel = self.firstLevel
+					startIndex = 0
+					endIndex = 0
 				end
-
+			else
 				--重置成第一层
 				currLevel = self.firstLevel
 				startIndex = 0
@@ -169,31 +197,27 @@ function WordFilter:isFilter(words)
 
 				--重置成第一层后再检查一次该字
 				nextLevel = currLevel and currLevel.map[code]
-				if nextLevel then
-					if startIndex == 0 then
-						startIndex = i
-					end
+				if nextLevel._isEnd then
 					endIndex = i
-					self:unfoldLevel(nextLevel)
-					currLevel = nextLevel
+					if startIndex > 0 and endIndex > 0 and endIndex >= startIndex then
+						if self:isLetter(ret[startIndex]) and self:isLetter(ret[endIndex]) then
+							local preLetter = ret[startIndex - 1]
+							local nextLetter = ret[endIndex + 1]
+							--前后两个都不是字母时为屏蔽字
+							if not self:isLetter(preLetter) and not self:isLetter(nextLetter) then
+								return true
+							end
+							return false
+						end
+						return true
+					end
+					--屏蔽词完结,重置成第一层
+					currLevel = self.firstLevel
+					startIndex = 0
+					endIndex = 0
 				end
 			end
 		end
-
-		table.insert(ret,code)
-	end
-
-	if startIndex > 0 and endIndex > 0 and endIndex > startIndex then
-		if self:isLetter(ret[startIndex]) and self:isLetter(ret[endIndex]) then
-			local preLetter = ret[startIndex - 1]
-			local nextLetter = ret[endIndex + 1]
-			--前后两个都不是字母时为屏蔽字
-			if not self:isLetter(preLetter) and not self:isLetter(nextLetter) then
-				return true
-			end
-			return false
-		end
-		return true
 	end
 
 	return false
@@ -213,6 +237,13 @@ function WordFilter:isLetter(code)
 	if code >= 65 and code <=90 or code >= 97 and code <= 122 then
 		return true
 	end
+end
+
+function WordFilter:convertEnLowerCode(code)
+	if code >= 65 and code <=90 then
+		return code + 32
+	end
+	return code
 end
 
 return WordFilter
