@@ -239,9 +239,15 @@ function WordFilter:isLetter(code)
 		return false
 	end
 
-	if code >= 65 and code <=90 or code >= 97 and code <= 122 then
-		return true
+	local letterArea = {65,90,97,122,126,687,880,123,1424,1791,3584,3711}
+	local len = #letterArea
+	for i=1,len,2 do
+		if code >= letterArea[i] and code <= letterArea[i+1] then
+			return true
+		end
 	end
+
+	return false
 end
 
 function WordFilter:convertEnLowerCode(code)
