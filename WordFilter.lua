@@ -53,6 +53,7 @@ function WordFilter:unfoldLevel(level)
 	 level._isInit = true
 end
 
+
 function WordFilter:doFilter(words)
 	local ret = {}
 	local replaceList = {}
@@ -60,33 +61,39 @@ function WordFilter:doFilter(words)
 	local endIndex = 0
 	local currLevel = self.firstLevel
 	local nextLevel = currLevel
-	local isExist = false
+	local i = 0
+
+
+	local insertReplace = function() 
+		if startIndex == 0 then
+			startIndex = i
+		end
+
+		self:unfoldLevel(nextLevel)
+		currLevel = nextLevel
+
+		if nextLevel._isEnd then
+			endIndex = i
+			if startIndex > 0 and endIndex > 0 and endIndex >= startIndex then
+				table.insert(replaceList,{startIndex,endIndex})
+			end
+			--屏蔽词完结,重置成第一层
+			currLevel = self.firstLevel
+			startIndex = 0
+			endIndex = 0
+		end
+	end
+
 
 	for index,code in utf8.codes(words) do
 		table.insert(ret,code)
-		local i = #ret
+		i = #ret
 
 		if not self.ignoreCode[code] then
 			code = self:convertEnLowerCode(code)
 			nextLevel = currLevel and currLevel.map[code]
 			if nextLevel then
-				if startIndex == 0 then
-					startIndex = i
-				end
-
-				self:unfoldLevel(nextLevel)
-				currLevel = nextLevel
-
-				if nextLevel._isEnd then
-					endIndex = i
-					if startIndex > 0 and endIndex > 0 and endIndex >= startIndex then
-						table.insert(replaceList,{startIndex,endIndex})
-					end
-					--屏蔽词完结,重置成第一层
-					currLevel = self.firstLevel
-					startIndex = 0
-					endIndex = 0
-				end
+				insertReplace()
 			else
 				--重置成第一层
 				currLevel = self.firstLevel
@@ -96,22 +103,7 @@ function WordFilter:doFilter(words)
 				--重置成第一层后再检查一次该字
 				nextLevel = currLevel and currLevel.map[code]
 				if nextLevel then
-					if startIndex == 0 then
-						startIndex = i
-					end
-					self:unfoldLevel(nextLevel)
-					currLevel = nextLevel
-
-					if nextLevel._isEnd then
-						endIndex = i
-						if startIndex > 0 and endIndex > 0 and endIndex >= startIndex then
-							table.insert(replaceList,{startIndex,endIndex})
-						end
-						--屏蔽词完结,重置成第一层
-						currLevel = self.firstLevel
-						startIndex = 0
-						endIndex = 0
-					end
+					insertReplace()
 				end
 			end
 		end
@@ -122,11 +114,18 @@ function WordFilter:doFilter(words)
 
 	if #replaceList > 0 then
 		for i,replace in ipairs(replaceList) do
-			if self:isLetter(ret[replace[1]]) and self:isLetter(ret[replace[2]]) then
-				local preLetter = ret[replace[1] - 1]
+			if self:isLetter(ret[replace[2]]) then
+				local needReplace = true
 				local nextLetter = ret[replace[2] + 1]
-				--前后两个都不是字母时，执行替换				
-				if not self:isLetter(preLetter) and not self:isLetter(nextLetter) then
+				if self:isLetter(nextLetter) then
+					needReplace = false
+					local nextReplace = replaceList[i+1]
+					if nextReplace and nextReplace[1] == (replace[2] + 1) then
+						needReplace = true
+					end
+				end
+	
+				if  needReplace then
 					for j=replace[1],replace[2] do
 						ret[j] = self.replaceCode
 					end
@@ -153,41 +152,42 @@ function WordFilter:isFilter(words)
 	local endIndex = 0
 	local currLevel = self.firstLevel
 	local nextLevel = currLevel
-	local isExist = false
+	local i = 0
+
+	local checkFilter = function()
+		if startIndex == 0 then
+			startIndex = i
+		end
+
+		self:unfoldLevel(nextLevel)
+		currLevel = nextLevel
+
+		if nextLevel._isEnd then
+			endIndex = i
+			if startIndex > 0 and endIndex > 0 and endIndex >= startIndex then
+				table.insert(replaceList,{startIndex,endIndex})
+				--非字母直接确认为屏蔽词，返回
+				if not self:isLetter(ret[endIndex]) then
+					return true
+				end
+			end
+			--屏蔽词完结,重置成第一层
+			currLevel = self.firstLevel
+			startIndex = 0
+			endIndex = 0
+		end
+	end
 
 	for index,code in utf8.codes(words) do
 		table.insert(ret,code)
-		local i = #ret
+		i = #ret
 
 		if not self.ignoreCode[code] then
 			code = self:convertEnLowerCode(code)
 			nextLevel = currLevel and currLevel.map[code]
 			if nextLevel then
-				if startIndex == 0 then
-					startIndex = i
-				end
-				self:unfoldLevel(nextLevel)
-				currLevel = nextLevel
-
-				if nextLevel._isEnd then
-					endIndex = i
-					if startIndex > 0 and endIndex > 0 and endIndex >= startIndex then
-						if self:isLetter(ret[startIndex]) and self:isLetter(ret[endIndex]) then
-							local preLetter = ret[startIndex - 1]
-							local nextLetter = ret[endIndex + 1]
-							--前后两个都不是字母时为屏蔽字
-							if not self:isLetter(preLetter) and not self:isLetter(nextLetter) then
-								return true
-							end
-							return false
-						end
-						
-						return true
-					end
-					--屏蔽词完结,重置成第一层
-					currLevel = self.firstLevel
-					startIndex = 0
-					endIndex = 0
+				if checkFilter() then
+					return true
 				end
 			else
 				--重置成第一层
@@ -197,29 +197,34 @@ function WordFilter:isFilter(words)
 
 				--重置成第一层后再检查一次该字
 				nextLevel = currLevel and currLevel.map[code]
-				if nextLevel._isEnd then
-					endIndex = i
-					if startIndex > 0 and endIndex > 0 and endIndex >= startIndex then
-						if self:isLetter(ret[startIndex]) and self:isLetter(ret[endIndex]) then
-							local preLetter = ret[startIndex - 1]
-							local nextLetter = ret[endIndex + 1]
-							--前后两个都不是字母时为屏蔽字
-							if not self:isLetter(preLetter) and not self:isLetter(nextLetter) then
-								return true
-							end
-							return false
-						end
+				if nextLevel then
+					if checkFilter() then
 						return true
 					end
-					--屏蔽词完结,重置成第一层
-					currLevel = self.firstLevel
-					startIndex = 0
-					endIndex = 0
 				end
 			end
 		end
 	end
 
+	-- dump(self.firstLevel,"self.firstLevel",10)
+	-- dump(replaceList,"replaceList",10)
+
+	for i,replace in ipairs(replaceList) do
+		if self:isLetter(ret[replace[2]]) then
+			local needReplace = true
+			local nextLetter = ret[replace[2] + 1]
+			if self:isLetter(nextLetter) then
+				needReplace = false
+				local nextReplace = replaceList[i+1]
+				if nextReplace and nextReplace[1] == (replace[2] + 1) then
+					needReplace = true
+				end
+			end
+			return needReplace
+		else
+			return true
+		end
+	end
 	return false
 end
 
