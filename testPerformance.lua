@@ -25,7 +25,7 @@ print("-------second use time "..endTime-beginTime)
 
 
 local beginTime = socket.gettime()
-local result = worldFilter:isFilter("fuck you fsff")
+local result = worldFilter:isFilter("abfuck you fsff 我")
 local endTime = socket.gettime()
 
 print("result = ",result)

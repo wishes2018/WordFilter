@@ -117,12 +117,14 @@ function WordFilter:doFilter(words)
 			if self:isLetter(ret[replace[2]]) then
 				local needReplace = true
 				local nextLetter = ret[replace[2] + 1]
-				if self:isLetter(nextLetter) then
+				local preLetter = ret[replace[1] - 1]
+				if self:isLetter(nextLetter) or self:isLetter(preLetter) then
 					needReplace = false
-					local nextReplace = replaceList[i+1]
-					if nextReplace and nextReplace[1] == (replace[2] + 1) then
-						needReplace = true
-					end
+				end
+
+				local nextReplace = replaceList[i+1]
+				if nextReplace and nextReplace[1] == (replace[2] + 1) then
+					needReplace = true
 				end
 	
 				if  needReplace then
@@ -213,12 +215,14 @@ function WordFilter:isFilter(words)
 		if self:isLetter(ret[replace[2]]) then
 			local needReplace = true
 			local nextLetter = ret[replace[2] + 1]
-			if self:isLetter(nextLetter) then
+			local preLetter = ret[replace[1] - 1]
+			if self:isLetter(nextLetter) or self:isLetter(preLetter) then
 				needReplace = false
-				local nextReplace = replaceList[i+1]
-				if nextReplace and nextReplace[1] == (replace[2] + 1) then
-					needReplace = true
-				end
+			end
+
+			local nextReplace = replaceList[i+1]
+			if nextReplace and nextReplace[1] == (replace[2] + 1) then
+				needReplace = true
 			end
 			return needReplace
 		else
@@ -239,7 +243,7 @@ function WordFilter:isLetter(code)
 		return false
 	end
 
-	local letterArea = {65,90,97,122,126,687,880,123,1424,1791,3584,3711}
+	local letterArea = {65,90,97,122,126,687,880,1791,3584,3711}
 	local len = #letterArea
 	for i=1,len,2 do
 		if code >= letterArea[i] and code <= letterArea[i+1] then
