@@ -24,11 +24,13 @@ function WordFilter:init(list)
 		local iter = {}
 		iter._f,iter._s,iter._var = utf8.codes(words)
 		local code = self:next(iter)
-		if not self.firstLevel.map[code] then
-			local nextLevel = {_isInit=false,iters={},map={}}
-			self.firstLevel.map[code] = nextLevel
+		if code then
+			if not self.firstLevel.map[code] then
+				local nextLevel = {_isInit=false,iters={},map={}}
+				self.firstLevel.map[code] = nextLevel
+			end
+			table.insert(self.firstLevel.map[code].iters,iter)
 		end
-		table.insert(self.firstLevel.map[code].iters,iter)
 	end
 	self.firstLevel._isInit = true
 end
