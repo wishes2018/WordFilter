@@ -26,7 +26,7 @@ function WordFilter:init(list)
 		local code = self:next(iter)
 		if code then
 			if not self.firstLevel.map[code] then
-				local nextLevel = {_isInit=false,iters={},map={}}
+				local nextLevel = {_isInit=false,_isEnd=false,iters={},map={}}
 				self.firstLevel.map[code] = nextLevel
 			end
 			table.insert(self.firstLevel.map[code].iters,iter)
@@ -35,24 +35,28 @@ function WordFilter:init(list)
 	self.firstLevel._isInit = true
 end
 
-function WordFilter:unfoldLevel(level)
-	if level._isInit then
+function WordFilter:unfoldLevel(level,isAdd)
+	--已经解析完成，直接返回
+	if level._isInit and not isAdd then
 		return
 	end
 
-	 for i,iter in ipairs(level.iters) do
-	 	local code = self:next(iter)
-	 	if code then
+	--解析该层，生成下一层
+	for i,iter in ipairs(level.iters) do
+		local code = self:next(iter)
+		if code then
 			if not level.map[code] then
 				local nextLevel = {_isInit=false,_isEnd=false,iters={},map={}}
 				level.map[code] = nextLevel
+				print("----unfold ",utf8.char(code))
 			end
 			table.insert(level.map[code].iters,iter)
 		else
 			level._isEnd = true
-	 	end
-	 end
-	 level._isInit = true
+		end
+	end
+	level._isInit = true
+	level.iters = {} --该层解析完成，清空
 end
 
 
@@ -94,6 +98,7 @@ function WordFilter:doFilter(words)
 		if not self.ignoreCode[code] then
 			code = self:convertEnLowerCode(code)
 			nextLevel = currLevel and currLevel.map[code]
+
 			if nextLevel then
 				insertReplace()
 			else
@@ -102,12 +107,13 @@ function WordFilter:doFilter(words)
 				startIndex = 0
 				endIndex = 0
 
-				--重置成第一层后再检查一次该字
+				--重置成第一层后再检查一次该字，即以该字为屏蔽词首字
 				nextLevel = currLevel and currLevel.map[code]
 				if nextLevel then
 					insertReplace()
 				end
 			end
+			print("----------doFilter ",code,utf8.char(code),nextLevel and nextLevel._isEnd)
 		end
 	end
 
@@ -261,6 +267,59 @@ function WordFilter:convertEnLowerCode(code)
 		return code + 32
 	end
 	return code
+end
+
+
+function WordFilter:addFilterWord(words)
+	if not words then
+		return
+	end
+	--第一层增加屏蔽词
+	self:init({words})
+
+	local currLevel = self.firstLevel
+	local nextLevel = currLevel
+	--展开其他层
+	for index,code in utf8.codes(words) do
+		if not self.ignoreCode[code] then
+			code = self:convertEnLowerCode(code)
+			nextLevel = currLevel and currLevel.map[code]
+			if nextLevel then
+				self:unfoldLevel(nextLevel,true) --对于已经展开过的，强制再展开一遍
+				currLevel = nextLevel
+			end
+		end
+	end
+end
+
+--删除屏蔽词，直接删掉最后一层(理论上可以向前回溯，进行删除剪枝，暂不这么做)
+function WordFilter:delFilterWord(words)
+	if not words then
+		return
+	end
+
+	local currLevel = self.firstLevel
+	local nextLevel = currLevel
+	local notFind = false
+
+	for index,code in utf8.codes(words) do
+		if not self.ignoreCode[code] then
+			code = self:convertEnLowerCode(code)
+			nextLevel = currLevel and currLevel.map[code]
+			if nextLevel then
+				self:unfoldLevel(nextLevel) --被删除的该词，可能还未展开，先展开下
+				currLevel = nextLevel
+			else
+				notFind = true
+			end
+		end
+	end
+
+	if notFind then
+		print("----------not find del words",words)
+	else
+		nextLevel._isEnd = false --删除最后一层
+	end
 end
 
 return WordFilter
