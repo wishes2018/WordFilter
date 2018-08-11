@@ -118,19 +118,23 @@ function WordFilter:findEnd(iter,codeList)
 	local currentLevel = self.firstLevel
 	local nextLevel = nil
 	local tempList = {}
+	local beginIndex = nil
 	while true do
 		local code = self:nextCode(iter)
 		if code then
 			code = self:convertEnLowerCode(code)
 			table.insert(tempList,code)
 			if not self.ignoreCode[code] then
+				if not beginIndex then
+					beginIndex = #codeList + #tempList
+				end
 				nextLevel = currentLevel.map[code]
 				self:unfoldLevel(nextLevel)
 				print("--------code ",utf8.char(code),nextLevel and nextLevel._isEnd)
 				if nextLevel then
 					if nextLevel._isEnd then
 						local replace = {}
-						replace.beginIndex = #codeList + 1
+						replace.beginIndex = beginIndex
 						for i,v in ipairs(tempList) do
 							table.insert(codeList,v)
 						end
