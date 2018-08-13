@@ -149,6 +149,9 @@ function WordFilter:findEnd(iter,codeList)
 				end
 			end
 		else
+			for i,v in ipairs(tempList) do
+				table.insert(codeList,v)
+			end
 			return nil
 		end
 	end
