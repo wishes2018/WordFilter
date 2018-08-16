@@ -5,11 +5,15 @@
 -- word 字 构成独立的意思
 local WordFilter = class("WordFilter")
 
-function WordFilter:ctor(replaceWord,ignoreWords,maxDepth)
+function WordFilter:ctor(replaceWord,ignoreWords,handleLetter,maxDepth)
 	ignoreWords = ignoreWords or ""
 	self.maxDepth = maxDepth or 20   --最大深度，暂未处理
 	self.firstLevel = {_isInit=false,_isEnd=false,iters={},map={}}
 	self.ignoreCode = {}
+	self.handleLetter = true
+	if handleLetter ~= nil then
+		self.handleLetter = handleLetter
+	end
 
 
 	for i,code in utf8.codes(ignoreWords) do
@@ -243,7 +247,11 @@ function WordFilter:isLetter(code)
 		return false
 	end
 
-	local letterArea = {65,90,97,122,126,687,880,1791,3584,3711}
+	if not self.handleLetter then
+		return false
+	end
+
+	local letterArea = {65,90,97,122,192,687,880,1791,3584,3711}
 	local len = #letterArea
 	for i=1,len,2 do
 		if code >= letterArea[i] and code <= letterArea[i+1] then
