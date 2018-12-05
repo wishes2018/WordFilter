@@ -220,7 +220,6 @@ function WordFilter:isFilter(words)
 
 	while true do
 		local replace = self:findReplace(iter,codeList)
-		local nextReplace = self:findReplace(iter,codeList)
 		if replace then
 			if self:isLetter(codeList[replace.endIndex]) then
 				replace = self:replaceLetters(codeList,replace,iter)
