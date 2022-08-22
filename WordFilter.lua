@@ -71,6 +71,7 @@ end
 function WordFilter:replaceLetters(codeList,replace,iter)
 	--该词前面为字母,不为屏蔽词
 	if self:isLetter(codeList[replace.beginIndex - 1]) then
+		print("----该词前面为字母,不为屏蔽词")
 		return nil
 	end
 
@@ -144,18 +145,17 @@ function WordFilter:findEnd(iter,codeList)
 						end
 						replace.endIndex = #codeList
 						replace.level = nextLevel
-						return replace
+						return replace --找到，进行替换
 					end
 					currentLevel = nextLevel
 				else
-					table.insert(codeList,tempList[1]) --未找到，则添加头部
+					table.insert(codeList,tempList[1]) --未找到，则添加首字母
 					return nil
 				end
 			end
 		else
-			for i,v in ipairs(tempList) do
-				table.insert(codeList,v)
-			end
+			--整句遍历完
+			table.insert(codeList,tempList[1]) --未找到，则添加首字母
 			return nil
 		end
 	end
@@ -168,11 +168,15 @@ function WordFilter:findReplace(iter,codeList)
 		self:copyIter(tempIter, iter)
 		local code = self:nextCode(iter)
 		if code then
-			replace = self:findEnd(tempIter,codeList) --尝试寻找最后一个屏蔽字
-			--找到则结束，否则继续遍历
-			if replace then
-				self:copyIter(iter, tempIter)
-				return replace
+			if self.ignoreCode[code] then
+				table.insert(codeList,code) --未找到，则添加首字母
+			else
+				replace = self:findEnd(tempIter,codeList) --尝试寻找最后一个屏蔽字
+				--找到则结束，否则继续遍历
+				if replace then
+					self:copyIter(iter, tempIter)
+					return replace
+				end
 			end
 		else
 			return nil --遍历完成
@@ -193,6 +197,7 @@ function WordFilter:doFilter(words)
 			print("--------replace ",replace.beginIndex,replace.endIndex)
 			if self:isLetter(codeList[replace.endIndex]) then
 				replace = self:replaceLetters(codeList,replace,iter)
+				print("---replaceLetters ",replace)
 			end
 			if replace then
 				beReplaced = true
