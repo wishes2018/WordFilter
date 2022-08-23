@@ -10,6 +10,8 @@ function WordFilter:ctor(replaceWord,ignoreWords,handleLetter,maxDepth)
 	self.maxDepth = maxDepth or 20   --最大深度，暂未处理
 	self.firstLevel = {_isInit=false,_isEnd=false,iters={},map={}}
 	self.ignoreCode = {}
+	self.tempIter = {}
+	self.tempList = {}
 	self.handleLetter = true
 	if handleLetter ~= nil then
 		self.handleLetter = handleLetter
@@ -78,15 +80,14 @@ function WordFilter:replaceLetters(codeList,replace,iter)
 	--多个屏蔽词相连，不用处理.由于前一个屏蔽词已被替换成*,*不为字母
 
 	--该词继续往后拓
-	local tempIter = {}
-	self:copyIter(tempIter, iter)
+	self:copyIter(self.tempIter, iter)
 	local currentLevel = replace.level
 	local nextLevel = nil
 	local tempList = {}
 	local code = nil
 	local hasNewLetter = false
 	while true do
-		code = self:nextCode(tempIter)
+		code = self:nextCode(self.tempIter)
 		if code then
 			code = self:convertEnLowerCode(code)
 			table.insert(tempList,code)
@@ -110,7 +111,7 @@ function WordFilter:replaceLetters(codeList,replace,iter)
 			table.insert(codeList,v)
 		end
 		replace.endIndex = #codeList
-		self:copyIter(iter,tempIter)
+		self:copyIter(iter,self.tempIter)
 	elseif hasNewLetter then
 		return nil
 	end
@@ -122,16 +123,17 @@ function WordFilter:findEnd(iter,codeList)
 	print("-----findEnd")
 	local currentLevel = self.firstLevel
 	local nextLevel = nil
-	local tempList = {}
+	self.tempListCount = 0
 	local beginIndex = nil
 	while true do
 		local code = self:nextCode(iter)
 		if code then
 			code = self:convertEnLowerCode(code)
-			table.insert(tempList,code)
+			self.tempList[self.tempListCount+1] = code
+			self.tempListCount = self.tempListCount + 1
 			if not self.ignoreCode[code] then
 				if not beginIndex then
-					beginIndex = #codeList + #tempList
+					beginIndex = #codeList + self.tempListCount
 				end
 				nextLevel = currentLevel.map[code]
 				self:unfoldLevel(nextLevel)
@@ -140,8 +142,8 @@ function WordFilter:findEnd(iter,codeList)
 					if nextLevel._isEnd then
 						local replace = {}
 						replace.beginIndex = beginIndex
-						for i,v in ipairs(tempList) do
-							table.insert(codeList,v)
+						for i=1,self.tempListCount do
+							table.insert(codeList,self.tempList[i])
 						end
 						replace.endIndex = #codeList
 						replace.level = nextLevel
@@ -149,13 +151,15 @@ function WordFilter:findEnd(iter,codeList)
 					end
 					currentLevel = nextLevel
 				else
-					table.insert(codeList,tempList[1]) --未找到，则添加首字母
+					table.insert(codeList,self.tempList[1]) --未找到，则添加头部
 					return nil
 				end
 			end
 		else
 			--整句遍历完
-			table.insert(codeList,tempList[1]) --未找到，则添加首字母
+			if self.tempListCount > 0 then
+				table.insert(codeList,self.tempList[1]) --未找到，则添加首字母
+			end
 			return nil
 		end
 	end
@@ -163,18 +167,17 @@ end
 
 function WordFilter:findReplace(iter,codeList)
 	local replace
-	local tempIter = {}
 	while true do
-		self:copyIter(tempIter, iter)
+		self:copyIter(self.tempIter, iter)
 		local code = self:nextCode(iter)
 		if code then
 			if self.ignoreCode[code] then
 				table.insert(codeList,code) --未找到，则添加首字母
 			else
-				replace = self:findEnd(tempIter,codeList) --尝试寻找最后一个屏蔽字
+				replace = self:findEnd(self.tempIter,codeList) --尝试寻找最后一个屏蔽字
 				--找到则结束，否则继续遍历
 				if replace then
-					self:copyIter(iter, tempIter)
+					self:copyIter(iter,self.tempIter)
 					return replace
 				end
 			end
