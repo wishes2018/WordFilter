@@ -141,7 +141,7 @@ end
 
 function WordFilter:doFilter(words)
 	if not words then return nil end
-	local codeList = table.pack(utf8.codepoint(words,1,#words))
+	local codeList = {utf8.codepoint(words,1,#words)}
 	local beReplaced = false
 	local codeBegin = 1
 	local len = #codeList
@@ -169,7 +169,7 @@ end
 
 function WordFilter:isFilter(words)
 	if not words then return false end
-	local codeList = table.pack(utf8.codepoint(words,1,#words))
+	local codeList = {utf8.codepoint(words,1,#words)}
 	local codeBegin = 1
 	local len = #codeList
 
